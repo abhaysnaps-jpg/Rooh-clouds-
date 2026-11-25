@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "VaultUser": {
+      "title": "VaultUser",
+      "description": "Authenticated RoohCloud user profile and cryptographic salt metadata (no raw Rooh Key stored).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Unique vault username",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_.\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 160
+        },
+        "authSalt": {
+          "type": "string",
+          "description": "Public random salt for authentication verifier derivation",
+          "maxLength": 64
+        },
+        "encSalt": {
+          "type": "string",
+          "description": "Public random salt for AES-256-GCM encryption key derivation",
+          "maxLength": 64
+        },
+        "storageQuotaBytes": {
+          "type": "number",
+          "description": "10 GB memory vault quota in bytes"
+        },
+        "usedMemoryBytes": {
+          "type": "number",
+          "description": "Current memory vault usage in bytes"
+        },
+        "teraboxConnected": {
+          "type": "boolean",
+          "description": "Whether the 1024 GB TeraBox bridge is connected"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "username", "email", "authSalt", "encSalt", "storageQuotaBytes", "usedMemoryBytes", "teraboxConnected", "createdAt", "updatedAt"]
+    },
+    "VaultFileRecord": {
+      "title": "VaultFileRecord",
+      "description": "Encrypted file index record synced to Firestore for an authenticated owner.",
+      "type": "object",
+      "properties": {
+        "fileId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "encryptedName": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "mimeType": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "mediaCategory": {
+          "type": "string",
+          "enum": ["image", "video", "pdf", "zip", "other"]
+        },
+        "originalSize": {
+          "type": "number"
+        },
+        "encryptedSize": {
+          "type": "number"
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["memory-vault", "google-drive", "terabox"]
+        },
+        "remoteId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "ivHex": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "sha256": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["fileId", "ownerId", "encryptedName", "mimeType", "mediaCategory", "originalSize", "encryptedSize", "provider", "remoteId", "ivHex", "sha256", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/VaultUser" },
+      "description": "Private owner-only vault user profile and cryptographic salts."
+    },
+    "/users/{userId}/files/{fileId}": {
+      "schema": { "$ref": "#/entities/VaultFileRecord" },
+      "description": "Owner-only encrypted file metadata records."
+    }
+  }
+}

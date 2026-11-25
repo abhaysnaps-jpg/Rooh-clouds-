@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    function isValidVaultUser(data, userId) {
+      return data.keys().hasAll([
+        'uid', 'username', 'email', 'authSalt', 'encSalt',
+        'storageQuotaBytes', 'usedMemoryBytes', 'teraboxConnected',
+        'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid', 'username', 'email', 'authSalt', 'encSalt',
+        'storageQuotaBytes', 'usedMemoryBytes', 'teraboxConnected',
+        'createdAt', 'updatedAt'
+      ])
+      && data.uid is string && data.uid == userId && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+      && data.username is string && data.username.size() >= 3 && data.username.size() <= 32 && data.username.matches('^[a-zA-Z0-9_.\\-]+$')
+      && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+      && data.authSalt is string && data.authSalt.size() >= 16 && data.authSalt.size() <= 64
+      && data.encSalt is string && data.encSalt.size() >= 16 && data.encSalt.size() <= 64
+      && data.storageQuotaBytes is number && data.storageQuotaBytes > 0 && data.storageQuotaBytes <= 10737418240
+      && data.usedMemoryBytes is number && data.usedMemoryBytes >= 0 && data.usedMemoryBytes <= 10737418240
+      && data.teraboxConnected is bool
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidVaultFileRecord(data, userId, fileId) {
+      return data.keys().hasAll([
+        'fileId', 'ownerId', 'encryptedName', 'mimeType', 'mediaCategory',
+        'originalSize', 'encryptedSize', 'provider', 'remoteId', 'ivHex',
+        'sha256', 'createdAt', 'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'fileId', 'ownerId', 'encryptedName', 'mimeType', 'mediaCategory',
+        'originalSize', 'encryptedSize', 'provider', 'remoteId', 'ivHex',
+        'sha256', 'createdAt', 'updatedAt'
+      ])
+      && data.fileId is string && data.fileId == fileId && data.fileId.size() <= 128 && data.fileId.matches('^[a-zA-Z0-9_\\-]+$')
+      && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid && data.ownerId.size() <= 128
+      && data.encryptedName is string && data.encryptedName.size() >= 1 && data.encryptedName.size() <= 512
+      && data.mimeType is string && data.mimeType.size() >= 1 && data.mimeType.size() <= 128
+      && data.mediaCategory is string && data.mediaCategory in ['image', 'video', 'pdf', 'zip', 'other']
+      && data.originalSize is number && data.originalSize >= 0
+      && data.encryptedSize is number && data.encryptedSize >= 0
+      && data.provider is string && data.provider in ['memory-vault', 'google-drive', 'terabox']
+      && data.remoteId is string && data.remoteId.size() >= 1 && data.remoteId.size() <= 256
+      && data.ivHex is string && data.ivHex.size() >= 16 && data.ivHex.size() <= 64
+      && data.sha256 is string && data.sha256.size() == 64
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidVaultUser(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidVaultUser(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['usedMemoryBytes', 'teraboxConnected', 'updatedAt'])
+          || incoming().diff(existing()).affectedKeys().hasOnly(['authSalt', 'encSalt', 'username', 'updatedAt'])
+        );
+      allow delete: if false;
+
+      match /files/{fileId} {
+        allow get: if isValidId(userId) && isValidId(fileId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(fileId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && isValidVaultFileRecord(incoming(), userId, fileId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isValidId(userId)
+          && isValidId(fileId)
+          && isOwner(userId)
+          && isValidVaultFileRecord(incoming(), userId, fileId)
+          && incoming().fileId == existing().fileId
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['encryptedName', 'provider', 'remoteId', 'updatedAt']);
+        allow delete: if isValidId(userId) && isValidId(fileId) && isOwner(userId);
+      }
+    }
+  }
+}

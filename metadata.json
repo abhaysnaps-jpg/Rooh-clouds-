@@ -1,0 +1,6 @@
+{
+  "name": "RoohCloud",
+  "description": "Zero-knowledge encrypted cloud storage vault with client-side Rooh Key AES-256-GCM encryption, browser ZIP extraction, secure share links, Google Drive sync, and TeraBox 1024 GB pool.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
